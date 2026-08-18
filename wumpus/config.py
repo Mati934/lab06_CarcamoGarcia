@@ -1,0 +1,28 @@
+"""Shared constants: grid size, colors, timing. Interface-owned."""
+from __future__ import annotations
+
+GRID_SIZE = 4
+CELL_PX = 130
+CONSOLE_HEIGHT = 130
+
+WINDOW_WIDTH = GRID_SIZE * CELL_PX
+WINDOW_HEIGHT = GRID_SIZE * CELL_PX + CONSOLE_HEIGHT
+
+FPS = 30
+
+DEFAULT_SEED = 42
+NUM_WUMPUS = 1
+PIT_PROBABILITY = 0.2
+
+# --- colors (r, g, b) ---
+COLOR_BG = (12, 14, 20)
+COLOR_GRID_LINE = (40, 44, 56)
+COLOR_CELL_UNKNOWN = (52, 59, 77)
+COLOR_CELL_VISITED = (35, 40, 54)
+COLOR_CELL_SAFE = (18, 58, 44)
+COLOR_CELL_DANGER = (74, 31, 40)
+COLOR_CELL_GOLD = (58, 49, 15)
+COLOR_AGENT = (79, 209, 232)
+COLOR_TEXT = (222, 226, 235)
+COLOR_TEXT_DIM = (140, 146, 163)
+COLOR_CONSOLE_BG = (8, 9, 13)
