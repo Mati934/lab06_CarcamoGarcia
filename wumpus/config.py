@@ -1,4 +1,5 @@
 """Shared constants: grid size, colors, timing. Interface-owned."""
+
 from __future__ import annotations
 
 GRID_SIZE = 4
@@ -9,6 +10,7 @@ WINDOW_WIDTH = GRID_SIZE * CELL_PX
 WINDOW_HEIGHT = GRID_SIZE * CELL_PX + CONSOLE_HEIGHT
 
 FPS = 30
+
 
 DEFAULT_SEED = 42
 NUM_WUMPUS = 1
