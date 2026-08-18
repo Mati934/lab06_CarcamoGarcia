@@ -58,11 +58,11 @@ class Environment:
         self,
         size: int = config.GRID_SIZE,
         seed: int | None = None,
-        pit_probability: float = config.PIT_PROBABILITY,
+        num_pits: int = config.NUM_PITS,
         num_wumpus: int = config.NUM_WUMPUS,
     ) -> None:
         self.size = size
-        self.pit_probability = pit_probability
+        self.num_pits = num_pits
         self.num_wumpus = num_wumpus
         self.reset(seed if seed is not None else config.DEFAULT_SEED)
 
@@ -79,7 +79,7 @@ class Environment:
         all_cells = [(c, r) for r in range(self.size) for c in range(self.size)]
         candidates = [c for c in all_cells if c != start]
 
-        self.pits: set[Cell] = {c for c in candidates if rng.random() < self.pit_probability}
+        self.pits: set[Cell] = set(rng.sample(candidates, k=min(self.num_pits, len(candidates))))
         remaining = [c for c in candidates if c not in self.pits]
         self.wumpus: set[Cell] = set(rng.sample(remaining, k=min(self.num_wumpus, len(remaining))))
         remaining = [c for c in remaining if c not in self.wumpus]
