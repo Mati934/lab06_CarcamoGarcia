@@ -12,7 +12,7 @@ FPS = 30
 
 DEFAULT_SEED = 42
 NUM_WUMPUS = 1
-PIT_PROBABILITY = 0.2
+NUM_PITS = 1
 
 # --- colors (r, g, b) ---
 COLOR_BG = (12, 14, 20)
