@@ -77,13 +77,17 @@ class Environment:
 
         start: Cell = (0, 0)
         all_cells = [(c, r) for r in range(self.size) for c in range(self.size)]
-        candidates = [c for c in all_cells if c != start]
+        # Start and its neighbors never hold a pit/wumpus, so the agent
+        # always has at least one demonstrably safe first move to make.
+        hazard_free = {start, *self.neighbors(start)}
+        hazard_candidates = [c for c in all_cells if c not in hazard_free]
 
-        self.pits: set[Cell] = set(rng.sample(candidates, k=min(self.num_pits, len(candidates))))
-        remaining = [c for c in candidates if c not in self.pits]
+        self.pits: set[Cell] = set(rng.sample(hazard_candidates, k=min(self.num_pits, len(hazard_candidates))))
+        remaining = [c for c in hazard_candidates if c not in self.pits]
         self.wumpus: set[Cell] = set(rng.sample(remaining, k=min(self.num_wumpus, len(remaining))))
-        remaining = [c for c in remaining if c not in self.wumpus]
-        self.gold: Cell = rng.choice(remaining) if remaining else rng.choice(candidates)
+
+        gold_candidates = [c for c in all_cells if c != start and c not in self.pits and c not in self.wumpus]
+        self.gold: Cell = rng.choice(gold_candidates) if gold_candidates else rng.choice(all_cells)
 
         self.agent_pos: Cell = start
         self.alive = True

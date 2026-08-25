@@ -8,6 +8,8 @@ touching this file, and vice versa.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import pygame
 
 from . import config
@@ -20,11 +22,29 @@ CONTROLS_LINES = [
 ]
 
 _CELL_LABELS = {
-    "pit": "P!",
-    "wumpus": "W!",
     "safe": "OK",
-    "gold": "AU",
 }
+
+ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
+
+# Full-cell background tiles, drawn first (grass everywhere, well.png
+# replacing it on pit cells) -- both stretched to fill the whole cell.
+_TILE_FILES = {
+    "floor": "grass.png",
+    "pit": "well.png",
+}
+
+# Smaller icons centered on top of the tile: the agent marker, the
+# wumpus/gold cell statuses, and the gold badge overlaid on the agent when
+# it's standing on the (not yet grabbed) gold cell.
+_ICON_FILES = {
+    "agent": "steeve.png",
+    "wumpus": "wumpus.png",
+    "gold": "gold.png",
+    "gold_badge": "gold.png",
+}
+
+_TINT_ALPHA = 90  # status color drawn translucent over the grass/well tile
 
 
 class Renderer:
@@ -34,6 +54,29 @@ class Renderer:
         self.font_cell = pygame.font.SysFont("consolas", 18, bold=True)
         self.font_glyph = pygame.font.SysFont("consolas", 14)
         self.font_hud = pygame.font.SysFont("consolas", 16)
+        self.tiles = self._load_scaled(_TILE_FILES, (config.CELL_PX, config.CELL_PX))
+        self.icons = self._load_scaled(_ICON_FILES, (config.CELL_PX - 24, config.CELL_PX - 24))
+        self.icons["gold_badge"] = pygame.transform.smoothscale(
+            self.icons["gold_badge"],
+            (round(self.icons["gold_badge"].get_width() * 0.55), round(self.icons["gold_badge"].get_height() * 0.55)),
+        )
+
+    def _load_scaled(self, files: dict[str, str], max_size: tuple[int, int]) -> dict[str, pygame.Surface]:
+        max_w, max_h = max_size
+        sprites: dict[str, pygame.Surface] = {}
+        for key, filename in files.items():
+            path = ASSETS_DIR / filename
+            image = pygame.image.load(str(path))
+            if not image.get_flags() & pygame.SRCALPHA:
+                # No per-pixel alpha in this asset (opaque background) --
+                # key out its corner color so it blends with the cell color
+                # like the other sprites instead of showing a solid square.
+                image.set_colorkey(image.get_at((0, 0)))
+            image = image.convert_alpha()
+            scale = min(max_w / image.get_width(), max_h / image.get_height())
+            size = (max(1, round(image.get_width() * scale)), max(1, round(image.get_height() * scale)))
+            sprites[key] = pygame.transform.smoothscale(image, size)
+        return sprites
 
     def draw(self, grid: list[list[CellView]], hud: HudInfo) -> None:
         self.screen.fill(config.COLOR_BG)
@@ -48,20 +91,42 @@ class Renderer:
                 y = row_idx * config.CELL_PX
                 rect = pygame.Rect(x, y, config.CELL_PX, config.CELL_PX)
 
-                pygame.draw.rect(self.screen, self._cell_color(cell), rect)
+                # 1. ground tile -- well.png on a confirmed pit, grass.png
+                #    everywhere else, both filling the whole cell.
+                tile = self.tiles["pit"] if cell.status == "pit" else self.tiles["floor"]
+                self.screen.blit(tile, (x, y))
+
+                # 2. translucent status tint on top of the tile, so safe /
+                #    unknown / danger cells stay readable at a glance.
+                tint = pygame.Surface((config.CELL_PX, config.CELL_PX), pygame.SRCALPHA)
+                tint.fill((*self._cell_color(cell), _TINT_ALPHA))
+                self.screen.blit(tint, (x, y))
+
                 pygame.draw.rect(self.screen, config.COLOR_GRID_LINE, rect, width=1)
 
                 if cell.percept_glyph:
                     glyph_surf = self.font_glyph.render(cell.percept_glyph, True, config.COLOR_TEXT_DIM)
                     self.screen.blit(glyph_surf, (x + 6, y + 4))
 
-                label = "" if cell.is_agent else _CELL_LABELS.get(cell.status, "")
-                if label:
-                    label_surf = self.font_cell.render(label, True, config.COLOR_TEXT)
-                    self.screen.blit(label_surf, label_surf.get_rect(center=rect.center))
+                # 3. character/creature icon on top of the tile+tint.
+                icon_key = "agent" if cell.is_agent else cell.status
+                icon = self.icons.get(icon_key)
+                if icon is not None:
+                    self.screen.blit(icon, icon.get_rect(center=rect.center))
+                else:
+                    label = _CELL_LABELS.get(cell.status, "")
+                    if label:
+                        label_surf = self.font_cell.render(label, True, config.COLOR_TEXT)
+                        self.screen.blit(label_surf, label_surf.get_rect(center=rect.center))
 
-                if cell.is_agent:
-                    pygame.draw.circle(self.screen, config.COLOR_AGENT, rect.center, config.CELL_PX // 5)
+                # 4. gold badge overlaid on the agent so finding the gold is
+                #    still visible even though the agent icon covers the
+                #    cell (rubric: the game must show discoveries clearly).
+                if cell.is_agent and cell.status == "gold":
+                    badge = self.icons["gold_badge"]
+                    badge_rect = badge.get_rect()
+                    badge_rect.bottomright = (rect.right - 6, rect.bottom - 6)
+                    self.screen.blit(badge, badge_rect)
 
     def _cell_color(self, cell: CellView) -> tuple[int, int, int]:
         if cell.status in ("pit", "wumpus"):

@@ -1,32 +1,12 @@
-"""Agent: autonomous decision-making for the Wumpus World.
-
-*** THIS FILE IS OWNED BY THE LOGIC/AGENT PAIR. ***
-
-Contract expected by game.py (auto mode, triggered by SPACE):
-    agent = Agent(environment, knowledge_base)
-    action = agent.decide_next_action()   # called once per turn
-
-`decide_next_action` must return one of:
-    "up", "down", "left", "right", "grab", "climb",
-    "shoot_up", "shoot_down", "shoot_left", "shoot_right"
-or None if there is nothing safe to do yet (game.py will idle and show a
-message rather than crash -- returning None is fine, just don't raise).
-
-Guidance (rubric item 3):
-  - Never return a move into a cell that `knowledge_base.infer_safe()` has
-    not returned True for -- only move to demonstrated-safe cells.
-  - Use search.find_path() to plan a route to the nearest unexplored safe
-    cell, to the gold once its location is known (glitter percept), or
-    back to (0, 0) to climb out once carrying gold.
-  - Read the world only through `environment`'s percept/observation API
-    (e.g. environment.last_percept, environment.cell_percepts,
-    environment.visited, environment.agent_pos). Do not read
-    environment.pits / .wumpus / .gold directly -- that would bypass the
-    inference this lab is about.
-"""
 from __future__ import annotations
 
 from typing import Optional
+
+from . import search
+
+Cell = tuple[int, int]
+
+START: Cell = (0, 0)
 
 
 class Agent:
@@ -35,4 +15,33 @@ class Agent:
         self.kb = knowledge_base
 
     def decide_next_action(self) -> Optional[str]:
-        raise NotImplementedError("TODO: implement autonomous decision-making")
+        env = self.environment
+        kb = self.kb
+        pos: Cell = env.agent_pos
+
+        if env.last_percept.glitter and not env.has_gold:
+            return "grab"
+
+        if env.has_gold:
+            if pos == START:
+                return "climb"
+            path = search.find_path(pos, START, kb.known_safe_cells(), env.size)
+            return path[0] if path else None
+
+        return self._step_towards_nearest_unexplored(pos)
+
+    def _step_towards_nearest_unexplored(self, pos: Cell) -> Optional[str]:
+        env = self.environment
+        kb = self.kb
+        safe_cells = kb.known_safe_cells()
+        targets = [c for c in safe_cells if c not in env.visited]
+
+        best_path: Optional[list[str]] = None
+        for target in targets:
+            path = search.find_path(pos, target, safe_cells, env.size)
+            if path is None:
+                continue
+            if best_path is None or len(path) < len(best_path):
+                best_path = path
+
+        return best_path[0] if best_path else None

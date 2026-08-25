@@ -1,100 +1,52 @@
 # Lab 06 — El mundo de Wumpus
 
-Proyecto en pareja. La estructura separa **interfaz/mecánica del mundo** (ya
-implementada) de **lógica del agente** (por implementar), para que ambas
-partes se puedan trabajar en paralelo sin pisarse.
-
-## Cómo correr
+## Cómo correr el juego
 
 ```
 uv run python main.py
 ```
 
-Con seed explícita (reproducible):
-
-```
-uv run python main.py --seed 123
-```
+Se abre una ventana con una cueva de 4x4. El agente (Steeve) siempre empieza en la esquina `(0,0)`.
 
 ## Controles
 
 | Tecla | Acción |
 |---|---|
-| flechas | mover (modo manual) |
-| shift + flecha | disparar en esa dirección (modo manual) |
-| G | agarrar oro |
-| C | subir/salir por (0,0) |
-| A | alternar modo manual / auto |
-| SPACE | un turno del agente (solo en modo auto) — ejecución paso a paso |
-| N | cueva nueva (seed aleatoria) |
-| R | reiniciar (misma seed, reproducible) |
-| ESC | salir |
+| Flechas | Mover al agente (modo manual) |
+| Shift + flecha | Disparar la flecha en esa dirección |
+| G | Agarrar el oro |
+| C | Subir/salir de la cueva |
+| A | Cambiar entre modo manual y modo automático |
+| SPACE | El agente da un turno (solo en modo automático) |
+| N | Cueva nueva (aleatoria) |
+| R | Reiniciar la misma cueva |
+| ESC | Salir |
 
-## Quién es dueño de qué archivo
+En **modo manual** te mueves con las flechas. En **modo automático**, cada vez que apretas **SPACE** el agente decide y ejecuta un movimiento por su cuenta — así se puede ver, turno por turno, cómo va razonando.
 
-**Interfaz / mecánica del mundo (ya implementado, no debería hacer falta tocarlo):**
+## Cómo funciona el agente
 
-- [wumpus/config.py](wumpus/config.py) — constantes: tamaño de grilla, colores, timing.
-- [wumpus/environment.py](wumpus/environment.py) — la "verdad" del mundo: genera la cueva
-  (aleatoria pero reproducible por seed), calcula percepciones (brisa, hedor,
-  brillo), ejecuta acciones (`move`, `grab`, `shoot`, `climb`) y lleva el
-  puntaje. No sabe nada de inferencia ni de decisiones del agente.
-- [wumpus/view_state.py](wumpus/view_state.py) — structs `CellView` / `HudInfo` que conectan
-  game.py con renderer.py.
-- [wumpus/renderer.py](wumpus/renderer.py) — dibuja la grilla y la consola inferior con PyGame.
-- [wumpus/game.py](wumpus/game.py) — loop principal, manejo de teclado, modo manual/auto,
-  ejecución paso a paso. Instancia `KnowledgeBase` y `Agent` y los llama de
-  forma defensiva (ver más abajo).
+El agente nunca ve dónde están el pozo ni el Wumpus. Esa información existe en el juego (por eso nosotros los vemos dibujados en el mapa), pero el agente solo recibe lo que percibe parado en su celda:
 
-**Lógica del agente (a implementar por el equipo, esto es lo que califica la rúbrica):**
+- **Brisa**: hay un pozo en alguna celda vecina.
+- **Hedor**: hay un Wumpus en alguna celda vecina.
+- **Brillo**: está parado sobre el oro.
 
-- [wumpus/knowledge_base.py](wumpus/knowledge_base.py) — clase `KnowledgeBase`: reglas de brisa/hedor
-  como cláusulas lógicas e inferencia **por enumeración** para probar si una
-  casilla es segura, tiene pozo o tiene Wumpus. Rúbrica ítems 2 y 4.
-- [wumpus/agent.py](wumpus/agent.py) — clase `Agent`: decide la siguiente acción usando la
-  KB y `search.py`, evitando casillas peligrosas y priorizando el oro.
-  Rúbrica ítem 3.
-- [wumpus/search.py](wumpus/search.py) — `find_path(start, goal, safe_cells, size)`: algoritmo
-  de búsqueda (BFS/A\*) que planifica el camino solo por casillas
-  demostradas seguras. Rúbrica ítems 4 y 5.
+Con eso, el agente arma su propia idea de qué celdas son seguras y decide su siguiente movimiento solo — nunca se le "avisa" dónde está el peligro.
 
-Cada uno de esos tres archivos tiene el contrato exacto (firmas de métodos,
-qué debe devolver, qué no debe hacer) documentado en su docstring. Mientras
-no estén implementados, sus métodos lanzan `NotImplementedError` a propósito
-— `game.py` lo captura y muestra "?" / un mensaje en vez de crashear, así el
-juego corre desde el día uno en modo manual mientras ustedes trabajan en la
-IA.
+### La base de conocimiento (deducción)
 
-## Contrato entre las dos partes
+Cada vez que el agente visita una celda, guarda lo que sintió ahí. Con esas pistas va descartando posibilidades: por ejemplo, si nunca sintió brisa en ninguna celda vecina a una casilla, esa casilla no puede tener un pozo. Así arma, celda por celda, una lista de "esto es seguro", "esto es peligroso" o "todavía no lo sé".
 
-```python
-kb = KnowledgeBase(size)
-kb.tell_percept(cell, breeze=bool, stench=bool)   # game.py la llama tras cada movimiento
-kb.infer_safe(cell)    -> True / False / None
-kb.infer_pit(cell)     -> True / False / None
-kb.infer_wumpus(cell)  -> True / False / None
-kb.known_safe_cells()  -> set[(col, row)]
+Una regla importante: el agente **nunca adivina**. Si con las pistas que tiene no alcanza para probar que una celda es segura, la trata como desconocida y no se arriesga a entrar ahí, aunque en la práctica una celda "desconocida" no siempre sea realmente peligrosa.
 
-agent = Agent(environment, kb)
-agent.decide_next_action() -> "up"|"down"|"left"|"right"|"grab"|"climb"
-                               |"shoot_up"|"shoot_down"|"shoot_left"|"shoot_right"
-                               | None
+### Cómo decide moverse (búsqueda)
 
-find_path(start, goal, safe_cells, size) -> list[str] | None
-```
+Una vez que el agente sabe qué celdas son seguras, usa **búsqueda por anchura (BFS)** para planear el camino más corto hacia donde quiere ir: la celda segura sin explorar más cercana, el oro cuando ya lo detectó, o de vuelta a `(0,0)` para salir cuando ya lo tiene. El agente jamás pisa una celda que no haya podido demostrar segura primero.
 
-`environment.py` expone solo percepciones (`environment.last_percept`,
-`environment.cell_percepts`, `environment.visited`, `environment.agent_pos`)
-— el agente no debe leer `environment.pits` / `.wumpus` / `.gold`
-directamente, eso sería hacer trampa respecto al objetivo del laboratorio
-(demostrar seguridad por inferencia, no por conocer la verdad del mundo).
+### Prioridades del agente
 
-## Coordenadas
-
-`(col, row)` con `(0, 0)` arriba-izquierda. `"up"` resta fila, `"down"` suma
-fila, `"left"` resta columna, `"right"` suma columna.
-
-## Entrega
-
-Comprimir el proyecto `uv` como `lab06-apellido.tar` y subirlo a Blackboard.
-Debe correr con `uv run python main.py`.
+1. Si está sobre el oro y no lo agarró todavía → lo agarra.
+2. Si ya tiene el oro → vuelve a `(0,0)` y sube.
+3. Si no → explora hacia la celda segura sin visitar más cercana.
+4. Si no le queda ninguna celda segura por explorar → se queda quieto (prefiere no moverse antes que arriesgarse a entrar a una celda que no pudo probar segura).

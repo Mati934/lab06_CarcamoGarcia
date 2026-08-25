@@ -56,7 +56,9 @@ def _inform_kb(env: Environment, kb: KnowledgeBase) -> None:
     if percept is None:
         return
     try:
-        kb.tell_percept(cell, breeze=percept.breeze, stench=percept.stench)
+        # A visited cell only proves itself hazard-free if the agent is
+        # still alive after entering it -- otherwise it may be the hazard.
+        kb.tell_percept(cell, breeze=percept.breeze, stench=percept.stench, alive=env.alive)
     except NotImplementedError:
         pass
 
